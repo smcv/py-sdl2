@@ -66,17 +66,42 @@ colors = {
     'white': color.Color(255, 255, 255, 255)
 }
 
-def check_image_contents(img):
+
+def dump_pixel_view(pxview, filename):
+    '''Show the pixels of pxview, which is assumed to be in format
+    SDL_PIXELFORMAT_ARGB8888 (array of 32-bit words with MSB = alpha)
+    and relatively small.
+    '''
+    print('Surface loaded from: ' + filename)
+    print(' AABBGGRR (hopefully)')
+    for row in pxview:
+        for px in row:
+            print(' %08x' % px, end='')
+
+        print()
+
+
+def check_image_contents(img, filename, expect_failure=False):
     # Test different coordinates on surface
     pxview = sdl2ext.PixelView(img)
+
+    if os.getenv('PYSDL2_TESTS_SHOW_PIXELS', ''):
+        dump_pixel_view(pxview, filename)
+
     img_red = color.ARGB(pxview[0][0])
     img_blue = color.ARGB(pxview[0][16])
     img_white = color.ARGB(pxview[0][31])
     img_black = color.ARGB(pxview[31][31])
-    assert img_red == colors['red']
-    assert img_blue == colors['blue']
-    assert img_white == colors['white']
-    assert img_black == colors['black']
+
+    try:
+        assert img_red == colors['red']
+        assert img_blue == colors['blue']
+        assert img_white == colors['white']
+        assert img_black == colors['black']
+    except AssertionError:
+        if not expect_failure:
+            dump_pixel_view(pxview, filename)
+        raise
 
 
 
@@ -85,7 +110,7 @@ def test_load_bmp(with_sdl):
     img_path = os.path.join(resource_path, "surfacetest.bmp")
     sf = sdl2ext.load_bmp(img_path)
     assert isinstance(sf, surf.SDL_Surface)
-    check_image_contents(sf)
+    check_image_contents(sf, img_path)
     surf.SDL_FreeSurface(sf)
 
     # Test exception on missing file
@@ -111,7 +136,7 @@ def test_save_bmp(with_sdl, tmpdir):
     assert os.path.exists(outpath)
     sf_saved = sdl2ext.load_bmp(outpath)
     assert isinstance(sf_saved, surf.SDL_Surface)
-    check_image_contents(sf_saved)
+    check_image_contents(sf_saved, outpath)
 
     # Try modifying/overwriting the existing BMP
     sdl2ext.fill(sf, (0, 255, 0, 255))
@@ -119,7 +144,7 @@ def test_save_bmp(with_sdl, tmpdir):
     sf_saved2 = sdl2ext.load_bmp(outpath)
     assert isinstance(sf_saved2, surf.SDL_Surface)
     with pytest.raises(AssertionError):
-        check_image_contents(sf_saved2)
+        check_image_contents(sf_saved2, outpath, True)
 
     surf.SDL_FreeSurface(sf)
     surf.SDL_FreeSurface(sf_saved)
@@ -150,7 +175,7 @@ def test_load_img(with_sdl):
         assert isinstance(sf, surf.SDL_Surface)
         assert sf.format.contents.format == pixels.SDL_PIXELFORMAT_ARGB8888
         if fmt not in skip_color_check:
-            check_image_contents(sf)
+            check_image_contents(sf, img_path)
         surf.SDL_FreeSurface(sf)
 
         sf2 = sdl2ext.load_img(img_path, as_argb=False)
@@ -213,7 +238,7 @@ def test_pillow_to_image(with_sdl):
     # Convert the image to an SDL surface and verify it worked
     sf = sdl2ext.pillow_to_surface(pil_img)
     assert isinstance(sf, surf.SDL_Surface)
-    check_image_contents(sf)
+    check_image_contents(sf, img_path)
     surf.SDL_FreeSurface(sf)
 
     # Try converting a palette image
@@ -221,7 +246,7 @@ def test_pillow_to_image(with_sdl):
     sfp = sdl2ext.pillow_to_surface(palette_img)
     pxformat = sfp.format.contents
     assert isinstance(sfp, surf.SDL_Surface)
-    check_image_contents(sfp)
+    check_image_contents(sfp, 'image converted from web palette')
     assert pxformat.BytesPerPixel == 4
     surf.SDL_FreeSurface(sfp)
 
@@ -249,7 +274,7 @@ def test_pillow_to_image(with_sdl):
         assert isinstance(sf, surf.SDL_Surface)
         assert sf.format.contents.format == pixels.SDL_PIXELFORMAT_ARGB8888
         if fmt not in skip_color_check:
-            check_image_contents(sf)
+            check_image_contents(sf, img)
         surf.SDL_FreeSurface(sf)
 
 
